@@ -1,0 +1,132 @@
+{% extends "django_collada_base.html" %}
+{% load staticfiles %}
+
+{% block extra_head_scripts %}
+    <script src="{% static "js/three_js/three.js" %}"></script>
+    <script src="{% static "js/three_js/Loader.js" %}"></script>
+    <script src="{% static "js/three_js/three.sceneloader.js" %}"></script>
+    <script src="{% static "js/three_js/three.binaryloader.js" %}"></script>
+    <script src="{% static "js/three_js/TrackballControls.js" %}"></script>
+{% endblock %}
+
+{% block content %}
+    <style type="text/css">
+        #three_div_container {
+            width: 100%;
+            height: 450px;
+        }
+    </style>
+
+    <script type="application/javascript">
+
+        function on_collada_id_click() {
+            threejs_scene.set_hex_color_by_id(event.target.name, 0);
+        }
+
+        function on_name_click() {
+            threejs_scene.set_hex_color_by_name(event.target.name, 0xff3333);
+        }
+        // Execute on timer
+        function update_properties() {
+            // Due to epc beeing dynamic, but still using the url template tag is nice.. works
+            var url = "{% url "django_collada_get_foobar_properties" "FOOBARSCENEID" %}";
+            url = url.replace("FOOBARSCENEID", {{ selected_scene.id }});
+
+            // Apply any other GET parameters here
+            var url_with_options = url;
+
+            console.log(url_with_options);
+
+            // And call the open service
+            $.ajax({
+                type : "GET",
+                url : url_with_options,
+                success : function(data) {
+                    for (var i = 0; i < data.length; i += 1) {
+                        try {
+                            var node_id = data[i]['node_id'];
+                            var x = data[i]['x'];
+                            var y = data[i]['y'];
+                            var z = data[i]['z'];
+                            var color = parseInt('0x' + data[i]['color']);
+                            threejs_scene.set_hex_color(node_id, color);
+                            threejs_scene.set_position(node_id, x, y, z);
+                        } catch (err) {
+                            console.error(err);
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update the scene with properties from a service call
+        setInterval(update_properties, {{ selected_scene.update_interval }});
+
+    </script>
+
+        <h1>Three.js</h1>
+        <p>Credit goes to the great <a href="http://threejs.org/">three.js</a> javascript library. Three.js
+        is a WebGL wrapper that makes setting up and loading scenes etc super simple. More examples at the link above.</p>
+        <br><br>
+        <div class="row">
+            <div class="col-sm-3">
+                <table class="table table-condensed">
+                    <tr>
+                        <th>Scene</th>
+                        <th>Download DAE</th>
+                    </tr>
+                    {% for scene in scenes %}
+                    <tr>
+                        <td><a href="?scene_id={{ scene.id }}">{{ scene }}</a></td>
+                        <td><a href="{{ scene.get_dae_media_path }}">{{ scene.dae_file }}</a></td>
+                    </tr>
+                    {% endfor %}
+                </table>
+                <a href="/admin/django_collada/foobarscene/add/" target="_blank">Django Admin: Add a FoobarScene</a>
+                <br><br>
+                <div class="alert alert-info">
+                    <h4>Camera controls:</h4>
+                    <dl>
+                      <dt>Rotate camera</dt>
+                      <dd>Left click and move mouse</dd>
+                      <dt>Pan</dt>
+                      <dd>Right click and move mouse</dd>
+                      <dt>Zoom</dt>
+                      <dd>Mouse wheel or click third button and drag mouse</dd>
+                    </dl>
+                </div>
+            </div>
+            {% if selected_scene %}
+            <div class="col-sm-7">
+                {% with selected_scene as collada_scene %}
+                <div id="three_div_container">
+                {% include "django_collada_three_js/django_collada_three_js_collada_viewport.html" %}
+                </div>
+                {% endwith %}
+            </div>
+            <div class="col-sm-2">
+            <h5>Named objects found: </h5>
+            <smal>Click on any ID or Collada Name to showcase how the object is found in the scene and how it changes color.</smal>
+            <table class="table table-condensed">
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                </tr>
+            {% for collada_id, name in selected_scene.get_quick_collada.named_objects.items %}
+                <tr>
+                    <td><a href="#" onclick="on_collada_id_click()" name="{{ collada_id }}">{{ collada_id }}</a></td>
+                    <td><a href="#" onclick="on_name_click()" name="{{ name }}">{{ name }}</a></td>
+                </tr>
+            {% endfor %}
+            </table>
+            </div>
+
+            <!-- TODO
+            <div class="col-md-2">
+                <h3>Object hierarchy</h3>
+                <h4>Geometries</h4>
+            </div>
+            -->
+            {% endif %}
+        </div>
+{% endblock %}

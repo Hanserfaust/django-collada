@@ -1,0 +1,433 @@
+{% load staticfiles %}
+
+<script src="{% static "js/three_js/three.min.js" %}"></script>
+<script src="{% static "js/three_js/stats.min.js" %}"></script>
+<script src="{% static "js/three_js/ColladaLoader.js" %}"></script>
+<script src="{% static "js/three_js/OrbitControls.js" %}"></script>
+
+<div id="three_div_{{ collada_scene.id }}" style="width: 100%; height: 100%;">
+</div>
+
+<script type="application/javascript">
+
+    var ThreeJSColladaScene = function() {
+        var that = this;
+
+        var SCREEN_WIDTH = window.innerWidth;
+        var SCREEN_HEIGHT = window.innerHeight;
+
+        var container, stats;
+
+        var scene;
+        var renderer;
+        var camera;
+        var dae;
+        var raycaster;
+
+        var mouse = new THREE.Vector2();
+
+        function initWorld() {
+
+            // Create a container
+            container = document.getElementById('three_div_{{ collada_scene.id }}');
+            //document.body.appendChild(container);
+
+            raycaster = new THREE.Raycaster();
+
+            // Create and attatch a renderer to the container
+            renderer = new THREE.WebGLRenderer({ alpha: true , antialias: true, shadowMapEnabled: true});
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setClearColor( 0x{{ 3js_config.background_color }}, {{ 3js_config.background_alpha }} );
+
+            // to antialias the shadow
+            renderer.shadowMapType = THREE.PCFSoftShadowMap;
+
+
+            container.appendChild(renderer.domElement);
+
+            // Listen to browser resize events
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Get mouse movements so we can record mouse position
+            container.addEventListener('mousemove', onDocumentMouseMove, false );
+            container.addEventListener('mousedown', onMouseDown, false);
+
+            // Setup Scene
+            scene = new THREE.Scene();
+
+            var fov = {{ 3js_config.fov|default:8 }};
+
+            var orthoCamera = false;
+
+            if (orthoCamera) {
+                camera = new THREE.OrthographicCamera( 0.5 * SCREEN_WIDTH / - 2, 0.5 * SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_HEIGHT / - 2, 150, 1000 );
+                /* Need further setup to use Orthographic camera,
+                *  follow this example: http://threejs.org/examples/webgl_camera.html
+                */
+
+            } else {
+                camera = new THREE.PerspectiveCamera(fov, window.innerWidth / window.innerHeight, 1, 200);
+                camera.position.set(2, 2, 3);
+            }
+
+            updateRendererSizeAndCamera();
+
+            setUpCameraControl(camera);
+
+            // Spherical shaped light, a sphere will be in the scene, not always what we want
+            var particleLight = new THREE.Mesh(new THREE.SphereGeometry(20, 30, 40), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+            //scene.add(particleLight);
+            //particleLight.add(new THREE.PointLight(0xffffff, 5));
+
+            //scene.add(new THREE.AmbientLight(0x888888));
+
+            var light = new THREE.SpotLight(0xffffff, 2);
+            light.position.set(3, 5, -6);
+            light.target.position.set( 0, 0, 0 );
+
+            light.castShadow = true;
+            light.shadowCameraVisible = true;
+            light.shadowCameraNear = 1200;
+            light.shadowCameraFar = 2500;
+            light.shadowCameraFov = 50;
+
+            //directionalLight.position.normalize();
+            scene.add(light);
+
+            light = new THREE.SpotLight(0xffffff, 1);
+            light.position.x = -3;
+            light.position.y = -5;
+            light.position.z = 6;
+            light.castShadow = true;
+            light.shadowCameraVisible = true;
+
+            //directionalLight.position.normalize();
+            scene.add(light);
+
+            // Grid?
+            {% if 3js_config.show_grid %}
+            grid = buildGrid(20, 1, 0x909090);
+            scene.add(grid);
+            {% endif %}
+
+            {% if 3js_config.show_axes %}
+            var axes = buildAxes( 200 );
+            scene.add(axes);
+            {% endif %}
+
+        }
+
+        function three_js_container_id() {
+            return "three_div_{{ collada_scene.id }}";
+        }
+
+
+        that.loadDaeFileFromUrl = function(daeUrl) {
+            var loader = new THREE.ColladaLoader();
+            loader.options.convertUpAxis = true;
+            loader.load(daeUrl, function (collada) {
+
+                dae = collada.scene;
+
+                dae.traverse(function (child) {
+                    if (child instanceof THREE.SkinnedMesh) {
+                        var animation = new THREE.Animation(child, child.geometry.animation);
+                        animation.play();
+                    }
+                    if (child instanceof THREE.Object3D) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                dae.scale.x = dae.scale.y = dae.scale.z = 0.002;
+                dae.position.x = {{ 3js_config.x_pos }};
+                dae.position.y = {{ 3js_config.y_pos }};
+                dae.position.z = {{ 3js_config.z_pos }};
+                dae.updateMatrix();
+
+                initWorld();
+
+                {% if 3js_config.show_stats %}
+                stats = new Stats();
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.top = '0px';
+                container.appendChild( stats.domElement );
+                {% endif %}
+
+                // Add the COLLADA
+                scene.add(dae);
+
+                animate();
+
+            });
+        };
+
+        function setUpCameraControl(camera) {
+
+            controls = new THREE.OrbitControls(camera, container);
+
+            controls.rotateSpeed = 0.3;
+            controls.zoomSpeed = 0.8;
+            controls.panSpeed = 0.4;
+
+            controls.noZoom = false;
+            controls.noPan = false;
+
+            controls.staticMoving = true;
+            controls.dynamicDampingFactor = 0.6;
+
+            controls.keys = [ 65, 83, 68 ];
+
+            {% if 3js_config.camera_overview_rotation %}
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = {{ 3js_config.camera_overview_rotation_speed }};
+            {% endif %}
+
+            controls.addEventListener('change', render);
+
+        }
+
+        function toggleAutoRotate() {
+            controls.autoRotate = !controls.autoRotate ;
+        }
+
+        function buildGrid(size, step, color) {
+
+            // Grid
+            var geometry = new THREE.Geometry();
+            var material = new THREE.LineBasicMaterial({ color: color });
+
+            for (var i = -size; i <= size; i += step) {
+
+                geometry.vertices.push(new THREE.Vector3(-size, -0.00, i));
+                geometry.vertices.push(new THREE.Vector3(size, -0.00, i));
+
+                geometry.vertices.push(new THREE.Vector3(i, -0.00, -size));
+                geometry.vertices.push(new THREE.Vector3(i, -0.00, size));
+
+            }
+
+            return new THREE.Line(geometry, material, THREE.LinePieces);
+
+        }
+
+        function buildAxis( src, dst, colorHex, dashed ) {
+                var geom = new THREE.Geometry(),
+                    mat;
+
+                if(dashed) {
+                        mat = new THREE.LineDashedMaterial({ linewidth: 2, color: colorHex, dashSize: 1, gapSize: 1 });
+                } else {
+                        mat = new THREE.LineBasicMaterial({ linewidth: 2, color: colorHex });
+                }
+
+                geom.vertices.push( src.clone() );
+                geom.vertices.push( dst.clone() );
+                geom.computeLineDistances(); // This one is SUPER important, otherwise dashed lines will appear as simple plain lines
+
+                var axis = new THREE.Line( geom, mat, THREE.LinePieces );
+
+                return axis;
+
+        }
+        function buildAxes( length ) {
+                var axes = new THREE.Object3D();
+
+                axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( length, 0, 0 ), 0xFF0000, false ) ); // +X (red)
+                axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( -length, 0, 0 ), 0xFF0000, true) ); // -X
+                axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, length, 0 ), 0x00FF00, false ) ); // +Y (green)
+                axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, -length, 0 ), 0x00FF00, true ) ); // -Y
+                axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, 0, length ), 0x0000FF, false ) ); // +Z (blue)
+                axes.add( buildAxis( new THREE.Vector3( 0, 0, 0 ), new THREE.Vector3( 0, 0, -length ), 0x0000FF, true ) ); // -Z
+
+                return axes;
+
+        }
+
+        function updateRendererSizeAndCamera() {
+            var parentContainer = document.getElementById(three_js_container_id()).parentNode;
+            var containerWidth = parentContainer.offsetWidth;
+            var containerHeight = parentContainer.offsetHeight;
+            renderer.setSize(containerWidth, containerHeight);
+
+            camera.aspect = containerWidth / containerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+        }
+
+        function onWindowResize() {
+            updateRendererSizeAndCamera();
+            //controls.handleResize();
+        }
+
+        function onMouseDown( event ) {
+            event.preventDefault();
+
+            mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+            mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+            //var closest_intersect = findRaycasterIntersects();
+
+            toggleAutoRotate();
+        }
+
+        function onDocumentMouseMove( event ) {
+
+            event.preventDefault();
+
+        }
+
+        function findRaycasterIntersects() {
+
+            raycaster.setFromCamera( mouse, camera );
+
+            var intersects = raycaster.intersectObjects( scene.children, true );
+            //console.log(intersects);
+            if ( intersects.length > 0 ) {
+                console.log(intersects[0].object);
+            }
+            return intersects;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            {% if 3js_config.camera_controls %}
+            controls.update();
+            {% endif %}
+
+            {% if 3js_config.camera_animation %}
+                animate_camera();
+            {% endif %}
+
+            render();
+
+            {% if 3js_config.show_stats %}
+            stats.update();
+            {% endif %}
+        }
+
+        var clock = new THREE.Clock();
+
+        var radius = 3;
+        var theta = 0;
+
+        function animate_camera() {
+            theta += 0.2;
+            camera.position.x = radius * Math.sin( THREE.Math.degToRad( theta ) );
+            camera.position.y = radius * Math.sin( THREE.Math.degToRad( theta ) );
+            camera.position.z = radius * Math.cos( THREE.Math.degToRad( theta ) );
+            camera.lookAt( scene.position );
+        }
+
+        function render() {
+            renderer.render(scene, camera);
+
+        }
+
+        /**
+         * Useful accessor methods vs the three.js data
+         */
+        that.get_object_by_collada_id = function(collada_id) {
+            return find_object_by_property('colladaId', collada_id, scene);
+        };
+
+        that.get_object_by_name = function(name) {
+            return find_object_by_property('name', name, scene);
+        };
+
+        /**
+         *  Will traverse the parent->children hierarchy of the object and return upon
+         *  the first matching object.
+         */
+        function find_object_by_property(property, value, object) {
+            if (object == null) {
+                return null;
+            }
+            if (property == 'colladaId') {
+                if (object.colladaId == value) {
+                    return object;
+                }
+            }
+            if (property == 'name') {
+                if (object.name == value) {
+                    return object;
+                }
+            }
+            // Has children? recurse then....
+            if (object.hasOwnProperty('children')) {
+                for (var j = 0; j < object.children.length; j += 1) {
+                    child = object.children[j];
+                    found_object = find_object_by_property(property, value, child);
+                    if (found_object != null) {
+                        return found_object;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function find_mesh(object) {
+            if (object.type == 'Mesh') {
+                return object;
+            }
+            for (var j = 0; j < object.children.length; j += 1) {
+                child = object.children[j];
+                found_object = find_mesh(child);
+                if (found_object != null) {
+                    return found_object;
+                }
+            }
+            return null;
+        }
+
+        that.set_hex_color_by_name = function(name, color_hex_value) {
+            var object3d = threejs_scene.get_object_by_name(name);
+            this.set_hex_color(object3d, color_hex_value);
+        };
+
+        that.set_hex_color_by_id = function(collada_id, color_hex_value) {
+            var object3d = threejs_scene.get_object_by_collada_id(collada_id);
+            this.set_hex_color(object3d, color_hex_value);
+        };
+
+        /**
+         * node_id is a string
+         * color as 0xff00bb
+         */
+        that.set_hex_color = function(object3d, color_hex_value) {
+
+            if (object3d != null) {
+                // Find the mesh object in this object child hierarchy
+                var mesh = find_mesh(object3d);
+
+                if (!mesh.material.hasOwnProperty('private_material')) {
+                    mesh.material = mesh.material.clone();
+                    mesh.material.private_material = true;
+                }
+                mesh.material.color.setHex(color_hex_value);
+                mesh.material.transparent = true;
+                mesh.material.opacity = 0.7;
+            }
+        };
+
+        that.set_position = function(node_id, x, y, z) {
+            var object3d = threejs_scene.get_object_by_collada_id(node_id);
+
+            if (object3d != null) {
+                var mesh = find_mesh(object3d);
+                mesh.position.x = x;
+                mesh.position.y = y;
+                mesh.position.z = z;
+            }
+        }
+    };
+
+    // threejs_scene is accessible fron the outside!
+    threejs_scene = new ThreeJSColladaScene();
+    threejs_scene.loadDaeFileFromUrl('{{ collada_scene.get_dae_media_path }}');
+
+</script>

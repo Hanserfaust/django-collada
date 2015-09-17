@@ -1,0 +1,71 @@
+{% extends "django_collada_base.html" %}
+{% block content %}
+
+    <h1>Django Collada Client Examples</h1>
+    <p>Django Collada is an open source project. It provides a simple way of working with <a href="https://collada.org/">COLLADA</a>-models
+    in a Django context. It provides a way to upload zipped collada archives (ie. .dae-file and related assets) to a
+    Django web application that can serve the uploaded files in an accessible manner for visualisation on the client side.
+    <br><br>
+    In addition, the scenes can easily be set up (grids, axes, background colors etc.) using a provided configuration
+    object for each supported visualisation technique.
+    <h2>Demo</h2>
+    The following browser technologies can be used to visualize Django Collada entities. Use the markup as a template
+    for your own implementation.</p>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Client technology</th>
+                <th>Django Collada Example</th>
+                <th>Grid</th>
+                <th>Axes</th>
+                <th>Movable camera</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><a href="http://threejs.org/">three.js</a></td>
+                <td><a href="{% url "django_collada_three_js" %}">Example</a></td>
+                <td>Yes</td>
+                <td>Yes</td>
+                <td>Yes</td>
+            </tr>
+        </tbody>
+    </table>
+    <h2>How it works</h2>
+    <p>Django Collada can import a COLLADA file to a Django project and then serve the dae and related assets statically.
+    The COLLADA model is not converted to a full Django persistent object by any means. We instead emply the excellent
+    <a href="http://pycollada.readthedocs.org/">pycollada</a> library to access the mesh in detail.</p>
+    <h2>Installation</h2>
+    <ol>
+        <li>pip install django_collada</li>
+        <li>Optional: If you want to have this page accessible in your project, ie. for playing with the examples provided you need
+            to add the django_collada application to your project, add the following line to your urls.py:<br><br>
+            <code>urlpatterns += (url(r'^django_collada', include('django_collada.urls')),)</code></li>
+            <br>
+            Also add <code>django_collada</code> to your djangos <b>settings.py</b>, INSATLLED_APPS
+    </ol>
+    <h2>Beyond the examples</h2>
+    <p>You should extend the django_collada.models.ColladaScene model class in your own applications and go from there to create
+    your views and logic around the collada model. Any of the visualisation examples above can be used as a starting point or may
+    serve well for simpler applications. If you need deeper interactions with scenes, you will of course need to dive
+    into the WebGL framework (ie. three.js) of choice.</p>
+    <h2>Suggested improvements</h2>
+    Django collada was developed as a component to a publicly funded project with a few specific requirements in mind so
+    there are loads of possibilities of improvements. The ideas could be incorporated into the django_collada project, or in your own
+    implementation.<br><br>
+    <dl>
+        <dt>Full CRUD</dt>
+        <dd>Would be cool to provide the full work flow of loading a model into the browser, change
+        some properties (like positions, color, lighting etc.) and save it to the backend.
+        </dd>
+        <dt>Data driven properties</dt>
+        <dd>Let some property of a 3D-model change depending on some underlying data
+        structure, ie. by periodic updates through a JSON service.
+        </dd>
+        <dt>Multi model scenes</dt>
+        <dd>Should not be too far away. Import a few models and then load them all into
+        the same scene.
+        </dd>
+    </dl>
+
+{% endblock %}
