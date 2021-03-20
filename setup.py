@@ -8,5 +8,5 @@ setup(name='django-collada',
     author='Hans Eklund',
     author_email='hans.eklund@igw.se',
     url='https://github.com/iGW/django-collada',
-    packages=['django-collada'],
+    packages=['django_collada'],
 )
