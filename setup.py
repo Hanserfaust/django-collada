@@ -9,4 +9,7 @@ setup(name='django-collada',
     author_email='hans.eklund@igw.se',
     url='https://github.com/iGW/django-collada',
     packages=['django_collada'],
+    requirements=[
+        'pycollada==0.4.1'
+    ]
 )
